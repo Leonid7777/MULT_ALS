@@ -466,10 +466,6 @@ main(void)
 
 
         // hz maybe it don't need here
-    // prihodit kakto gay k doktoru
-    // i govorit
-    // doktor, u menya bolit vhod
-    // golubchik, vy yesli eto mesto budete nazyvat vhodom, to ono tak i budet bolet
 
         create_matrix(matrices[i], razm[i], rank);
     }
