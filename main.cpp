@@ -93,7 +93,7 @@ tensor_make(std::complex<double>** tensor, int length, double& right_side_norm)
     right_side_norm = dznrm2_(&szfull, (*tensor), &ione);
 }
 void
-create_small_tensor(std::complex<double>* tensor, std::complex<double>** s_tensor, int N, int* s_razm, int* razm, int length, int s_length, double& right_side_norm)
+create_small_tensor(std::complex<double>* tensor, std::complex<double>** s_tensor, int N, int* s_razm, int* razm, int length, int s_length, double& right_side_norm, int* positions)
 {
     int ione = 1;
     int szfull = s_length;
@@ -429,7 +429,7 @@ main(void)
     std::srand(std::time(nullptr));
     int N, rank, R;
     int length = 1, s_length = 1;
-    double right_side_norm, noise;
+    double right_side_norm, noise, coef;
     std::cout << "Введите количество размерностей тензора: ";
     std::cin >> N;
 
@@ -438,7 +438,7 @@ main(void)
     for(int i = 0; i < N; i++) {
         std::cout << "Введите " << i + 1 << "-ю" << " размерность: ";
         std::cin >> razm[i];
-        s_razm[i] = (razm[i] + 1) / 2;
+        s_razm[i] = razm[i] * coef;
         length *= razm[i];
         s_length *= s_razm[i];
     }
@@ -452,17 +452,23 @@ main(void)
     std::cout << "Введите ранг: ";
     std::cin >> rank;
 
+    std::cout << "Введите долю элементов в меньшем тензоре: ";
+    std::cin >> coef;
+
+
     std::complex<double>* tensor;
     std::complex<double>** matrices = new std::complex<double>*[N];
 
     std::complex<double>* s_tensor;
     std::complex<double>** s_matrices = new std::complex<double>*[N];
 
+    int* positions = new int[s_length];
+
 
     std::complex<double>* end_tensor;
 
     for(int i = 0; i < N; i++) {
-        create_matrix(s_matrices[i], razm[i] / 2, rank);
+        create_matrix(s_matrices[i], razm[i] * coef, rank);
 
 
         // hz maybe it don't need here
@@ -475,7 +481,7 @@ main(void)
     std::cout << std::endl << std::endl;
 
 
-    create_small_tensor(tensor, &s_tensor, N, s_razm, razm, length, s_length, right_side_norm);
+    create_small_tensor(tensor, &s_tensor, N, s_razm, razm, length, s_length, right_side_norm, positions);
 
     double relative_residual;
 
