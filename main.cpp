@@ -4,7 +4,8 @@
 #include <cmath>
 #include <complex>
 #include <random>
-
+#include <cmath>
+#include <algorithm>
 
 
 void stirling_vector(std::complex<double>* mas, int N, double angle) {
@@ -37,8 +38,17 @@ find_constant(std::complex<double>* mas, std::complex<double>* res, int N, std::
     C = f_sum / s_sum;
 }
 
+void 
+stirling_vector_with_positions(std::complex<double>* mas, int N, double angle, int* positions) {
+
+    for (int i = 0; i < N; i++) {
+        ((mas)[i]).real(std::cos(angle * positions[i]));
+        ((mas)[i]).imag(std::sin(angle * positions[i]));
+    }
+}
+
 void
-vec_app(int h, int N, std::complex<double>* mas, std::complex<double>* res, std::complex<double>& C, int length)
+vec_app(int h, int N, std::complex<double>* mas, std::complex<double>* res, std::complex<double>& C, int length, int* positions)
 {
 
     double phi = 2 * M_PI / h;
@@ -48,7 +58,7 @@ vec_app(int h, int N, std::complex<double>* mas, std::complex<double>* res, std:
 
     for(int i = 0; i < h; i++) {
 
-        stirling_vector(sec, N, i * phi);
+        stirling_vector_with_positions(sec, N, i * phi, positions);
 
         vec_to_conj_vec(mas, sec, sum, N);
 
@@ -92,9 +102,44 @@ tensor_make(std::complex<double>** tensor, int length, double& right_side_norm)
 
     right_side_norm = dznrm2_(&szfull, (*tensor), &ione);
 }
+
+int* 
+genRanUnAscNum(int n, int R) {
+    int* mas = new int[n];
+
+    for (int i = 0; i < n; ++i) {
+        mas[i] = i;
+    }
+
+    for (int i = n - 1; i > 0; --i) {
+        int j = rand() % (i + 1);
+        std::swap(mas[i], mas[j]);
+    }
+
+
+    for (int i = 0; i < n; ++i) {
+        mas[i] = (mas[i] * R) / n;
+    }
+
+    std::sort(mas, mas + n);
+
+    return mas;
+}
+
+
+
 void
-create_small_tensor(std::complex<double>* tensor, std::complex<double>** s_tensor, int N, int* s_razm, int* razm, int length, int s_length, double& right_side_norm, int* positions)
+create_small_tensor(std::complex<double>* tensor, std::complex<double>** s_tensor, int N, int* s_razm, int* razm, int length, int s_length, double& right_side_norm, int** positions)
 {
+
+    for(int i = 0; i < N; i++) {
+        positions[i] = genRanUnAscNum(s_razm[i], razm[i]);
+    }
+
+
+
+
+
     int ione = 1;
     int szfull = s_length;
 
@@ -122,7 +167,7 @@ create_small_tensor(std::complex<double>* tensor, std::complex<double>** s_tenso
         while(mas[N - 1] < s_razm[N - 1]) {
 
             for(int i = 0; i < N; i++) {
-                ind += mas[i] * multipliers[i];
+                ind += positions[i][mas[i]] * multipliers[i];
             }
             
             (*s_tensor)[count] = tensor[ind];
@@ -317,7 +362,7 @@ ALS(std::complex<double>* tensor, std::complex<double>** matrices, int N, int ra
 
         for(int i = 0; i < N; i++) {
             S = new std::complex<double>[length / razm[i] * rank];
-            // T = new std::complex<double>[length];
+
             create_S_T(matrices, i, rank, N - 1, razm, S, T, tensor);
             
             leftsize = length / razm[i];
@@ -341,14 +386,12 @@ ALS(std::complex<double>* tensor, std::complex<double>** matrices, int N, int ra
             }
 
             delete[] S;
-            // delete[] T;
 
         }
         diffrent = end_relative_residual - relative_residual;
         if(iteration % 1000 == 0) {
-            std::cout << diffrent << std::endl;
+            std::cout << "diffrent: " << diffrent << std::endl;
         }
-        // std::cout << "diffrent: " << diffrent << std::endl;
     }
 
     std::cout << "iteration: " << iteration << std::endl; 
@@ -427,21 +470,32 @@ int
 main(void)
 {
     std::srand(std::time(nullptr));
-    int N, rank, R;
-    int length = 1, s_length = 1;
-    double right_side_norm, noise, coef;
+    int N, rank, R, grid_frequency = 2000;
+    int length = 1, s_length = 1, mnogitel = 2, col, coef;
+    double right_side_norm, noise;
+
+    std::cout << "Введите количество АЛС: ";
+    std::cin >> col;
+
     std::cout << "Введите количество размерностей тензора: ";
     std::cin >> N;
 
+    coef = pow(mnogitel, col);
+
+    int** positions = new int*[N];
+
     int* razm = new int[N];
     int* s_razm = new int[N];
+    int* sr_razm = new int[N];
+
     for(int i = 0; i < N; i++) {
         std::cout << "Введите " << i + 1 << "-ю" << " размерность: ";
         std::cin >> razm[i];
-        s_razm[i] = razm[i] * coef;
+        s_razm[i] = razm[i] / coef;
         length *= razm[i];
         s_length *= s_razm[i];
     }
+
 
     std::cout << "Введите желаемый ранг тензора (без учёта шума): ";
     std::cin >> R;
@@ -452,9 +506,6 @@ main(void)
     std::cout << "Введите ранг: ";
     std::cin >> rank;
 
-    std::cout << "Введите долю элементов в меньшем тензоре: ";
-    std::cin >> coef;
-
 
     std::complex<double>* tensor;
     std::complex<double>** matrices = new std::complex<double>*[N];
@@ -462,41 +513,62 @@ main(void)
     std::complex<double>* s_tensor;
     std::complex<double>** s_matrices = new std::complex<double>*[N];
 
-    int* positions = new int[s_length];
+
 
 
     std::complex<double>* end_tensor;
+    std::complex<double> C;
+
+    double relative_residual;
+
+    for(int i = 0; i < N; i++) {
+        create_matrix(matrices[i], razm[i], rank);
+    }
 
     for(int i = 0; i < N; i++) {
         create_matrix(s_matrices[i], razm[i] * coef, rank);
-
-
-        // hz maybe it don't need here
-
-        create_matrix(matrices[i], razm[i], rank);
     }
 
     tensor_make_not_random(&tensor, razm, length, N, R, right_side_norm, noise, &end_tensor);
 
-    std::cout << std::endl << std::endl;
+    for(int it = 0; it < col; it++) {
 
 
-    create_small_tensor(tensor, &s_tensor, N, s_razm, razm, length, s_length, right_side_norm, positions);
-
-    double relative_residual;
+        create_small_tensor(tensor, &s_tensor, N, s_razm, razm, length, s_length, right_side_norm, positions);
 
 
 
-    relative_residual = ALS(s_tensor, s_matrices, N, rank, s_razm, s_length, right_side_norm);
+        relative_residual = ALS(s_tensor, s_matrices, N, rank, s_razm, s_length, right_side_norm);
 
-    // делаю АЛС для верхнего уголочка размера n/2
+        coef /= mnogitel;
 
-    std::complex<double> C;
-
-    for(int i = 0; i < N; i++) {
-        for(int j = 0; j < rank; j++) {
-            vec_app(2000, s_razm[i], &s_matrices[i][j * s_razm[i]], &matrices[i][j * razm[i]], C, razm[i]);
+        for(int i = 0; i < N; i++) {
+            sr_razm[i] = razm[i] / coef;
         }
+
+        for(int i = 0; i < N; i++) {
+            for(int j = 0; j < rank; j++) {
+                vec_app(grid_frequency, s_razm[i], &s_matrices[i][j * s_razm[i]], &matrices[i][j * sr_razm[i]], C, sr_razm[i], positions[i]);
+            }
+        }
+
+
+
+        for(int i = 0; i < N; i++) {
+            s_razm[i] = sr_razm[i];
+            delete[] positions[i];
+            delete[] s_matrices[i];
+            s_matrices[i] = new std::complex<double>[rank * sr_razm[i]];
+
+            for(int r = 0; r < rank; r++) {
+                for(int row = 0; row < sr_razm[i]; row++) {
+                    s_matrices[i][row + r * sr_razm[i]] = matrices[i][row + r * sr_razm[i]];
+                }
+            }
+        }
+
+        delete[] s_tensor;
+    
     }
 
 
