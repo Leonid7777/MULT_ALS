@@ -460,6 +460,7 @@ main(void)
 
 
     std::complex<double>* end_tensor;
+    std::complex<double>* s_end_tensor;
 
     for(int i = 0; i < N; i++) {
         create_matrix(s_matrices[i], razm[i] / 2, rank);
@@ -472,16 +473,34 @@ main(void)
 
     tensor_make_not_random(&tensor, razm, length, N, R, right_side_norm, noise, &end_tensor);
 
-    std::cout << std::endl << std::endl;
-
 
     create_small_tensor(tensor, &s_tensor, N, s_razm, razm, length, s_length, right_side_norm);
+
+    // std::cout << std::endl << std::endl;
+    // for (int i = 0; i < length; i++) {
+    //     std::cout << tensor[i] << " ";
+    // }
+
+    // std::cout << std::endl << std::endl;
+    // for (int i = 0; i < s_length; i++) {
+    //     std::cout << s_tensor[i] << " ";
+    // }
+    // std::cout << std::endl << std::endl;
 
     double relative_residual;
 
 
 
     relative_residual = ALS(s_tensor, s_matrices, N, rank, s_razm, s_length, right_side_norm);
+
+    double sum = 0;
+    
+    // for(int i = 0; i < N; i++) {
+    //     sum += s_razm[i];
+    // }
+    // sum = sqrt((rank * sum) / s_length);
+    // std::cout << "Expected error: " << noise * sum << std::endl;
+    // create_ALS_tensor(s_matrices, rank, N, s_razm, s_end_tensor, s_length, right_side_norm);
 
     // делаю АЛС для верхнего уголочка размера n/2
 
@@ -499,7 +518,7 @@ main(void)
 
     std::cout << "Residual norm: " << relative_residual << std::endl;
 
-    double sum = 0;
+    sum = 0;
     for(int i = 0; i < N; i++) {
         sum += razm[i];
     }
