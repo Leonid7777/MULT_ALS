@@ -188,6 +188,10 @@ create_small_tensor(std::complex<double>* tensor, std::complex<double>** s_tenso
 
     right_side_norm = dznrm2_(&szfull, (*s_tensor), &ione);
 
+    delete[] multipliers;
+    delete[] s_multipliers;
+    delete[] mas;
+
 }
 
 void
@@ -347,6 +351,8 @@ ALS(std::complex<double>* tensor, std::complex<double>** matrices, int N, int ra
     double relative_residual = 100.0, end_relative_residual = 2.0;
     double diffrent = abs(end_relative_residual - relative_residual);
 
+    right_side_norm = dznrm2_(&szfull, tensor, &ione);
+
 
     // std::cout << "Right side norm: " << right_side_norm << std::endl;
     std::complex<double>* S;
@@ -476,6 +482,8 @@ main(void)
 
     std::cout << "Введите количество АЛС: ";
     std::cin >> col;
+    col--;
+    
 
     std::cout << "Введите количество размерностей тензора: ";
     std::cin >> N;
@@ -537,7 +545,6 @@ main(void)
         create_small_tensor(tensor, &s_tensor, N, s_razm, razm, length, s_length, right_side_norm, positions);
 
 
-
         relative_residual = ALS(s_tensor, s_matrices, N, rank, s_razm, s_length, right_side_norm);
 
         coef /= mnogitel;
@@ -553,9 +560,10 @@ main(void)
         }
 
 
-
+        s_length = 1;
         for(int i = 0; i < N; i++) {
             s_razm[i] = sr_razm[i];
+            s_length *= s_razm[i];
             delete[] positions[i];
             delete[] s_matrices[i];
             s_matrices[i] = new std::complex<double>[rank * sr_razm[i]];
@@ -593,8 +601,13 @@ main(void)
     delete[] end_tensor;
     for(int i = 0; i < N; i++) {
         delete[] matrices[i];
+        delete[] s_matrices[i];
     }
     delete[] matrices;
+    delete[] s_matrices;
+    delete[] s_razm;
+    delete[] sr_razm;
+    delete[] positions;
 
     return 0;
 }
