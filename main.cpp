@@ -14,12 +14,23 @@ extern "C"
     void zgels_(const char *, const int *, const int *, const int *, std::complex<double> *, const int *, std::complex<double> *, const int *, std::complex<double> *, const int *, int *);
 }
 
-void stirling_vector(std::complex<double>* mas, int N, double angle) 
+void stirling_vector(std::complex<double>*& mas, int N, double angle, std::complex<double> C) 
 {
+    std::complex<double> val;
     for (int i = 0; i < N; i++) {
-        ((mas)[i]).real(std::cos(angle * i));
-        ((mas)[i]).imag(std::sin(angle * i));
+        val.real(std::cos(angle * i));
+        val.imag(std::sin(angle * i));
+
+        // std::cout << "val = " << val << std::endl;
+        val *= C;
+        ((mas)[i]).real(val.real());
+        ((mas)[i]).imag(val.imag());
     }
+
+    // for (int i = 0; i < N; i++) {
+    //     std::cout << mas[i] << " ";
+    // }
+    // std::cout << std::endl;
 }
 
 void
@@ -44,7 +55,7 @@ find_constant(std::complex<double>* mas, std::complex<double>* res, int N, std::
 }
 
 void 
-stirling_vector_with_positions(std::complex<double>* mas, int N, double angle, int* positions) 
+stirling_vector_with_positions(std::complex<double>*& mas, int N, double angle, int* positions) 
 {
     for (int i = 0; i < N; i++) {
         ((mas)[i]).real(std::cos(angle * positions[i]));
@@ -75,9 +86,21 @@ vec_app(int h, int N, std::complex<double>* mas, std::complex<double>* res, std:
 
     phi *= val;
 
-    stirling_vector(res, length, phi);
+    C.real(1);
+    C.imag(0);
+
+    stirling_vector(res, length, phi, C);
+
+    // for (int i = 0; i < N; i++) {
+    //     std::cout << res[i] << " ";
+    // }
+    // std::cout << std::endl << std::endl;
 
     find_constant(mas, res, N, C);
+
+    // std::cout << "C = " << C << std::endl;
+
+    stirling_vector(res, length, phi, C);
 
     delete[] sec;
 }
@@ -178,7 +201,7 @@ tensor_make_not_random(std::complex<double>** tensor, int *razm, int length, int
 
     double phi;
     for(int r = 0; r < R; r++) {
-        phi = -100.0 + 200.0 * double(std::rand()) / RAND_MAX;
+        phi = 2 * M_PI * double(std::rand()) / RAND_MAX;
         for (int i = 0; i < length; i++) {
             std::complex<double> val (cos(phi * i), sin(phi * i));
             (*tensor)[i] += val;
@@ -451,9 +474,10 @@ algorithm_ALS(int N, int rank, int R, std::complex<double>* tensor, int* razm, d
 
     double relative_residual;
 
-    for(int i = 0; i < N; i++) {
-        matrices[i] = new std::complex<double>[razm[i] * rank];
-    }
+    // for(int i = 0; i < N; i++) {
+    //     // matrices[i] = new std::complex<double>[razm[i] * rank];
+    //     create_matrix(matrices[i], razm[i], rank);
+    // }
 
     for(int i = 0; i < N; i++) {
         create_matrix(s_matrices[i], razm[i] * coef, rank);
@@ -471,11 +495,27 @@ algorithm_ALS(int N, int rank, int R, std::complex<double>* tensor, int* razm, d
             sr_razm[i] = razm[i] / coef;
         }
 
+        // std::cout << sr_razm[0] << std::endl;
+
+        // for(int i = 0; i < sr_razm[0]; i++) {
+        //     std::cout << matrices[0][i] << " ";
+        // }
+        // std::cout << std::endl;
+
         for(int i = 0; i < N; i++) {
             for(int j = 0; j < rank; j++) {
                 vec_app(grid_frequency, s_razm[i], &s_matrices[i][j * s_razm[i]], &matrices[i][j * sr_razm[i]], C, sr_razm[i], positions[i]);
             }
         }
+
+        // for(int i = 0; i < sr_razm[0]; i++) {
+        //     std::cout << matrices[0][i] << " ";
+        // }
+        // std::cout << std::endl;
+
+
+
+        
 
         s_length = 1;
         for(int i = 0; i < N; i++) {
@@ -515,25 +555,30 @@ main(void)
     int length = 1;
     double right_side_norm, noise;
     
-    std::cout << "Введите количество размерностей тензора: ";
-    std::cin >> N;
+    // std::cout << "Введите количество размерностей тензора: ";
+    // std::cin >> N;
+    N = 3;
 
     int* razm = new int[N];
 
     for(int i = 0; i < N; i++) {
-        std::cout << "Введите " << i + 1 << "-ю" << " размерность: ";
-        std::cin >> razm[i];
+        // std::cout << "Введите " << i + 1 << "-ю" << " размерность: ";
+        // std::cin >> razm[i];
+        razm[i] = 32;
         length *= razm[i];
     }
 
-    std::cout << "Введите желаемый ранг тензора (без учёта шума): ";
-    std::cin >> R;
+
+    // std::cout << "Введите желаемый ранг тензора (без учёта шума): ";
+    // std::cin >> R;
+    R = 3;
 
     std::cout << "Введите долю шума: ";
     std::cin >> noise;
 
-    std::cout << "Введите ранг: ";
-    std::cin >> rank;
+    // std::cout << "Введите ранг: ";
+    // std::cin >> rank;
+    rank = R;
 
     std::complex<double>* tensor;
 
@@ -542,6 +587,12 @@ main(void)
     tensor_make_not_random(&tensor, razm, length, N, R, right_side_norm, noise, &end_tensor);
 
     std::complex<double>** matrices = new std::complex<double>*[N];
+
+    for(int i = 0; i < N; i++) {
+        // matrices[i] = new std::complex<double>[razm[i] * rank];
+        create_matrix(matrices[i], razm[i], rank);
+    }
+    
     algorithm_ALS(N, rank, R, tensor, razm, right_side_norm, length, noise, matrices);
 
     double sum = 0;
