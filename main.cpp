@@ -6,7 +6,7 @@
 #include <random>
 #include <cmath>
 #include <algorithm>
-
+#include <fstream>
 
 extern "C"
 {
@@ -66,6 +66,11 @@ stirling_vector_with_positions(std::complex<double>*& mas, int N, double angle, 
 void
 vec_app(int h, int N, std::complex<double>* mas, std::complex<double>* res, std::complex<double>& C, int length, int* positions)
 {
+    std::cout << "positions: ";
+    for(int i = 0; i < N; i++) {
+        std::cout << positions[i] << " ";
+    }
+    std::cout << std::endl;
     double phi = 2 * M_PI / h;
     int val = 0;
     std::complex<double> max_sum = 0, sum = 0;
@@ -86,10 +91,14 @@ vec_app(int h, int N, std::complex<double>* mas, std::complex<double>* res, std:
 
     phi *= val;
 
+    std::cout << phi << std::endl;
+
     C.real(1);
     C.imag(0);
 
-    stirling_vector(res, length, phi, C);
+    stirling_vector_with_positions(res, N, phi, positions);
+
+    // stirling_vector(res, length, phi, C);
 
     // for (int i = 0; i < N; i++) {
     //     std::cout << res[i] << " ";
@@ -109,20 +118,21 @@ int*
 genRanUnAscNum(int n, int R) {
     int* mas = new int[n];
 
-    for (int i = 0; i < n; ++i) {
-        mas[i] = i;
+    int count = 0;
+    int flag = 0;
+    while(count < n) {
+        mas[count] = (double)rand() / RAND_MAX * R;
+
+        for(int j = 0; j < count; j++) {
+            if(mas[j] == mas[count]) {
+                flag = 1;
+            }
+        }
+        if(!flag) {
+            count++;
+        }
+        flag = 0;
     }
-
-    for (int i = n - 1; i > 0; --i) {
-        int j = rand() % (i + 1);
-        std::swap(mas[i], mas[j]);
-    }
-
-
-    for (int i = 0; i < n; ++i) {
-        mas[i] = (mas[i] * R) / n;
-    }
-
     std::sort(mas, mas + n);
 
     return mas;
@@ -207,7 +217,22 @@ tensor_make_not_random(std::complex<double>** tensor, int *razm, int length, int
             (*tensor)[i] += val;
             (*end_tensor)[i] += val;
         }
+        
+        double k = 1;
+        for(int i = 0; i < N; i++) {
+            double n = phi * k;
+            while(n > 2 * M_PI) {
+                n -= 2 * M_PI;
+            }
+            while(n < 0) {
+                n += 2 * M_PI;
+            }
+            std::cout << "phi" << r << " " << n << std::endl;
+            k *= razm[i];
+        }
     }
+
+
 
     right_side_norm = dznrm2_(&szfull, (*tensor), &ione);
 
@@ -224,6 +249,47 @@ tensor_make_not_random(std::complex<double>** tensor, int *razm, int length, int
         (*tensor)[i] += sample;
     }
 }
+
+
+
+
+
+
+
+
+
+void
+read_tensor(std::complex<double>** tensor, int length, double& right_side_norm)
+{
+    std::ifstream input("input.txt");
+
+    int ione = 1;
+    int szfull = length;
+
+    *tensor = new std::complex<double>[length];
+    // *end_tensor = new std::complex<double>[length];
+
+    double real, imag;
+    int i = 0;
+
+    while (input >> real >> imag) {
+        std::complex<double> complex_num(real, imag);
+        (*tensor)[i] = complex_num;
+        // (*end_tensor)[i] = complex_num;
+        i++;
+    }
+
+    right_side_norm = dznrm2_(&szfull, (*tensor), &ione);
+}
+
+
+
+
+
+
+
+
+
 
 void
 create_matrix(std::complex<double>* &matrix, long long razm, int rank)
@@ -326,7 +392,7 @@ create_S_T(std::complex<double>** matrices, int busy_side, int rank, int N, int*
 }
 
 double 
-ALS(std::complex<double>* tensor, std::complex<double>** matrices, int N, int rank, int* razm, int length, double& right_side_norm)
+ALS(std::complex<double>* tensor, std::complex<double>** matrices, int N, int rank, int* razm, int length, double& right_side_norm, int iter)
 {
     int szfull = length;
     int ione = 1;
@@ -346,7 +412,7 @@ ALS(std::complex<double>* tensor, std::complex<double>** matrices, int N, int ra
     std::complex<double>* T = new std::complex<double>[length];
     int iteration = 0;
 
-    while(diffrent  > 1.0e-11 && iteration < 100000)
+    while(diffrent  > 1.0e-15 && iteration < iter)
     {
         end_relative_residual = relative_residual;
         iteration++;
@@ -445,11 +511,12 @@ create_ALS_tensor(std::complex<double>** matrices, int rank, int N, int* razm, s
 }
 
 void
-algorithm_ALS(int N, int rank, int R, std::complex<double>* tensor, int* razm, double& right_side_norm, int length, double noise, std::complex<double>** matrices)
+algorithm_ALS(int N, int rank, int R, std::complex<double>* tensor, int* razm, double& right_side_norm, int length, std::complex<double>** matrices)
 {
     std::srand(std::time(nullptr));
-    int grid_frequency = 2000;
-    int s_length = 1, mnogitel = 2, col, coef;
+    int grid_frequency = 20000;
+    int s_length = 1, col;
+    double mnogitel = 2, coef;
 
     std::cout << "Введите количество АЛС: ";
     std::cin >> col;
@@ -487,7 +554,9 @@ algorithm_ALS(int N, int rank, int R, std::complex<double>* tensor, int* razm, d
 
         create_small_tensor(tensor, &s_tensor, N, s_razm, razm, length, s_length, positions);
 
-        relative_residual = ALS(s_tensor, s_matrices, N, rank, s_razm, s_length, right_side_norm);
+        relative_residual = ALS(s_tensor, s_matrices, N, rank, s_razm, s_length, right_side_norm, 100);
+
+        std::cout << "s_rel_res: " << relative_residual << std::endl;
 
         coef /= mnogitel;
 
@@ -535,9 +604,55 @@ algorithm_ALS(int N, int rank, int R, std::complex<double>* tensor, int* razm, d
         delete[] s_tensor;
     }
 
-    relative_residual = ALS(tensor, matrices, N, rank, razm, length, right_side_norm);
+    double r_n = 0;
 
+    for(int i = 0; i < length; i++) {
+        std::complex<double> sum = 0;
+
+        for(int r = 0; r < R; r++) {
+            std::complex<double> k_sum (1, 0);
+            int ind = i;
+
+            for(int j = N - 1 ; j >= 0; j--) {
+                int jnd = ind % razm[j];
+                k_sum *= matrices[j][r * razm[j] + jnd];
+                ind /= razm[j];
+            }
+
+            sum += k_sum;
+        }
+        // std::cout << sum << " " << tensor[i] << std::endl;
+        r_n += std::norm(tensor[i] - sum);
+    }
+     std::cout << "Residual norm 1: " << std::sqrt(r_n) / right_side_norm << std::endl;
+
+    relative_residual = ALS(tensor, matrices, N, rank, razm, length, right_side_norm, 1);
     std::cout << "Residual norm: " << relative_residual << std::endl;
+
+
+    r_n = 0;
+
+    for(int i = 0; i < length; i++) {
+        std::complex<double> sum = 0;
+
+        for(int r = 0; r < R; r++) {
+            std::complex<double> k_sum (1, 0);
+            int ind = i;
+
+            for(int j = N - 1 ; j >= 0; j--) {
+                int jnd = ind % razm[j];
+                k_sum *= matrices[j][r * razm[j] + jnd];
+                ind /= razm[j];
+            }
+
+            sum += k_sum;
+        }
+        // std::cout << sum << " " << tensor[i] << std::endl;
+        r_n += std::norm(tensor[i] - sum);
+    }
+
+
+    std::cout << "Residual norm: " << std::sqrt(r_n) / right_side_norm << std::endl;
 
     for(int i = 0; i < N; i++) {
         delete[] s_matrices[i];
@@ -551,30 +666,32 @@ algorithm_ALS(int N, int rank, int R, std::complex<double>* tensor, int* razm, d
 int
 main(void)
 {
+    std::srand(42);
     int N, rank, R;
     int length = 1;
     double right_side_norm, noise;
     
     // std::cout << "Введите количество размерностей тензора: ";
     // std::cin >> N;
-    N = 3;
+    N = 4;
 
     int* razm = new int[N];
 
     for(int i = 0; i < N; i++) {
         // std::cout << "Введите " << i + 1 << "-ю" << " размерность: ";
         // std::cin >> razm[i];
-        razm[i] = 32;
+        razm[i] = 50;
         length *= razm[i];
     }
 
 
     // std::cout << "Введите желаемый ранг тензора (без учёта шума): ";
     // std::cin >> R;
-    R = 3;
+    R = 5;
 
-    std::cout << "Введите долю шума: ";
-    std::cin >> noise;
+    // std::cout << "Введите долю шума: ";
+    // std::cin >> noise;
+    noise = 1;
 
     // std::cout << "Введите ранг: ";
     // std::cin >> rank;
@@ -586,6 +703,8 @@ main(void)
 
     tensor_make_not_random(&tensor, razm, length, N, R, right_side_norm, noise, &end_tensor);
 
+    // read_tensor(&tensor, length, right_side_norm);
+
     std::complex<double>** matrices = new std::complex<double>*[N];
 
     for(int i = 0; i < N; i++) {
@@ -593,18 +712,18 @@ main(void)
         create_matrix(matrices[i], razm[i], rank);
     }
     
-    algorithm_ALS(N, rank, R, tensor, razm, right_side_norm, length, noise, matrices);
+    algorithm_ALS(N, rank, R, tensor, razm, right_side_norm, length, matrices);
 
     double sum = 0;
     for(int i = 0; i < N; i++) {
         sum += razm[i];
     }
 
-    sum = sqrt((rank * sum) / length);
+    // sum = sqrt((rank * sum) / length);
 
-    std::cout << "Expected error: " << noise * sum << std::endl;
+    // std::cout << "Expected error: " << noise * sum << std::endl;
 
-    create_ALS_tensor(matrices, rank, N, razm, end_tensor, length, right_side_norm);
+    // create_ALS_tensor(matrices, rank, N, razm, end_tensor, length, right_side_norm);
 
     delete[] tensor;
     delete[] end_tensor;
