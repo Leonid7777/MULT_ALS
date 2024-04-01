@@ -55,30 +55,38 @@ find_constant(std::complex<double>* mas, std::complex<double>* res, int N, std::
 }
 
 void 
-stirling_vector_with_positions(std::complex<double>*& mas, int N, double angle, int* positions) 
+stirling_vector_with_positions(std::complex<double>*& mas, int N, double angle, int* positions, std::complex<double> C) 
 {
+    std::complex<double> val;
     for (int i = 0; i < N; i++) {
-        ((mas)[i]).real(std::cos(angle * positions[i]));
-        ((mas)[i]).imag(std::sin(angle * positions[i]));
+        val.real(std::cos(angle * positions[i]));
+        val.imag(std::sin(angle * positions[i]));
+
+        val *= C;
+        ((mas)[i]).real(val.real());
+        ((mas)[i]).imag(val.imag());
     }
 }
 
 void
-vec_app(int h, int N, std::complex<double>* mas, std::complex<double>* res, std::complex<double>& C, int length, int* positions)
+vec_app(int h, int N, std::complex<double>* mas, std::complex<double>* res, std::complex<double>& C, int length, int* positions, int* b_positions)
 {
-    std::cout << "positions: ";
-    for(int i = 0; i < N; i++) {
-        std::cout << positions[i] << " ";
-    }
-    std::cout << std::endl;
+    // std::cout << "positions: ";
+    // for(int i = 0; i < N; i++) {
+    //     std::cout << positions[i] << " ";
+    // }
+    // std::cout << std::endl;
     double phi = 2 * M_PI / h;
     int val = 0;
     std::complex<double> max_sum = 0, sum = 0;
     std::complex<double>* sec = new std::complex<double>[N];
 
+    C.real(1);
+    C.imag(0);
+
     for(int i = 0; i < h; i++) {
 
-        stirling_vector_with_positions(sec, N, i * phi, positions);
+        stirling_vector_with_positions(sec, N, i * phi, positions, C);
 
         vec_to_conj_vec(mas, sec, sum, N);
 
@@ -91,12 +99,9 @@ vec_app(int h, int N, std::complex<double>* mas, std::complex<double>* res, std:
 
     phi *= val;
 
-    std::cout << phi << std::endl;
+    // std::cout << phi << std::endl;
 
-    C.real(1);
-    C.imag(0);
-
-    stirling_vector_with_positions(res, N, phi, positions);
+    stirling_vector_with_positions(res, N, phi, positions, C);
 
     // stirling_vector(res, length, phi, C);
 
@@ -109,7 +114,7 @@ vec_app(int h, int N, std::complex<double>* mas, std::complex<double>* res, std:
 
     // std::cout << "C = " << C << std::endl;
 
-    stirling_vector(res, length, phi, C);
+    stirling_vector_with_positions(res, length, phi, b_positions, C);
 
     delete[] sec;
 }
@@ -141,9 +146,9 @@ genRanUnAscNum(int n, int R) {
 void
 create_small_tensor(std::complex<double>* tensor, std::complex<double>** s_tensor, int N, int* s_razm, int* razm, int length, int s_length, int** positions)
 {
-    for(int i = 0; i < N; i++) {
-        positions[i] = genRanUnAscNum(s_razm[i], razm[i]);
-    }
+    // for(int i = 0; i < N; i++) {
+    //     positions[i] = genRanUnAscNum(s_razm[i], razm[i]);
+    // }
 
     int ione = 1;
     int szfull = s_length;
@@ -218,18 +223,18 @@ tensor_make_not_random(std::complex<double>** tensor, int *razm, int length, int
             (*end_tensor)[i] += val;
         }
         
-        double k = 1;
-        for(int i = 0; i < N; i++) {
-            double n = phi * k;
-            while(n > 2 * M_PI) {
-                n -= 2 * M_PI;
-            }
-            while(n < 0) {
-                n += 2 * M_PI;
-            }
-            std::cout << "phi" << r << " " << n << std::endl;
-            k *= razm[i];
-        }
+        // double k = 1;
+        // for(int i = 0; i < N; i++) {
+        //     double n = phi * k;
+        //     while(n > 2 * M_PI) {
+        //         n -= 2 * M_PI;
+        //     }
+        //     while(n < 0) {
+        //         n += 2 * M_PI;
+        //     }
+        //     std::cout << "phi" << r << " " << n << std::endl;
+        //     k *= razm[i];
+        // }
     }
 
 
@@ -516,7 +521,7 @@ algorithm_ALS(int N, int rank, int R, std::complex<double>* tensor, int* razm, d
     std::srand(std::time(nullptr));
     int grid_frequency = 20000;
     int s_length = 1, col;
-    double mnogitel = 2, coef;
+    double mnogitel = 1.5, coef;
 
     std::cout << "Введите количество АЛС: ";
     std::cin >> col;
@@ -525,6 +530,7 @@ algorithm_ALS(int N, int rank, int R, std::complex<double>* tensor, int* razm, d
     coef = pow(mnogitel, col);
 
     int** positions = new int*[N];
+    int** b_positions = new int*[N];
 
     int* s_razm = new int[N];
     int* sr_razm = new int[N];
@@ -550,11 +556,19 @@ algorithm_ALS(int N, int rank, int R, std::complex<double>* tensor, int* razm, d
         create_matrix(s_matrices[i], razm[i] * coef, rank);
     }
 
+    for(int i = 0; i < N; i++) {
+        positions[i] = genRanUnAscNum(s_razm[i], razm[i]);
+    }
+
     for(int it = 0; it < col; it++) {
 
         create_small_tensor(tensor, &s_tensor, N, s_razm, razm, length, s_length, positions);
 
-        relative_residual = ALS(s_tensor, s_matrices, N, rank, s_razm, s_length, right_side_norm, 100);
+        if(it == 0) {
+            relative_residual = ALS(s_tensor, s_matrices, N, rank, s_razm, s_length, right_side_norm, 1000);
+        } else {
+            relative_residual = ALS(s_tensor, s_matrices, N, rank, s_razm, s_length, right_side_norm, 1);
+        }
 
         std::cout << "s_rel_res: " << relative_residual << std::endl;
 
@@ -572,19 +586,22 @@ algorithm_ALS(int N, int rank, int R, std::complex<double>* tensor, int* razm, d
         // std::cout << std::endl;
 
         for(int i = 0; i < N; i++) {
+            b_positions[i] = genRanUnAscNum(sr_razm[i], razm[i]);
+        }
+
+        for(int i = 0; i < N; i++) {
             for(int j = 0; j < rank; j++) {
-                vec_app(grid_frequency, s_razm[i], &s_matrices[i][j * s_razm[i]], &matrices[i][j * sr_razm[i]], C, sr_razm[i], positions[i]);
+                vec_app(grid_frequency, s_razm[i], &s_matrices[i][j * s_razm[i]], &matrices[i][j * sr_razm[i]], C, sr_razm[i], positions[i], b_positions[i]);
             }
         }
 
-        // for(int i = 0; i < sr_razm[0]; i++) {
-        //     std::cout << matrices[0][i] << " ";
+        // for(int i = 0; i < N; i++) {
+        //     std::cout << sr_razm[i] << std::endl;
+        //     for(int j = 0; j < sr_razm[i]; j++) {
+        //         std::cout << b_positions[i][j] << " ";
+        //     }
+        //     std::cout << std::endl;
         // }
-        // std::cout << std::endl;
-
-
-
-        
 
         s_length = 1;
         for(int i = 0; i < N; i++) {
@@ -598,6 +615,10 @@ algorithm_ALS(int N, int rank, int R, std::complex<double>* tensor, int* razm, d
                 for(int row = 0; row < sr_razm[i]; row++) {
                     s_matrices[i][row + r * sr_razm[i]] = matrices[i][row + r * sr_razm[i]];
                 }
+            }
+            positions[i] = new int[sr_razm[i]];
+            for(int j = 0; j < sr_razm[i];j++) {
+                positions[i][j] = b_positions[i][j];
             }
         }
 
@@ -661,6 +682,7 @@ algorithm_ALS(int N, int rank, int R, std::complex<double>* tensor, int* razm, d
     delete[] s_razm;
     delete[] sr_razm;
     delete[] positions;
+    delete[] b_positions;
 }
 
 int
@@ -673,21 +695,21 @@ main(void)
     
     // std::cout << "Введите количество размерностей тензора: ";
     // std::cin >> N;
-    N = 4;
+    N = 3;
 
     int* razm = new int[N];
 
     for(int i = 0; i < N; i++) {
         // std::cout << "Введите " << i + 1 << "-ю" << " размерность: ";
         // std::cin >> razm[i];
-        razm[i] = 50;
+        razm[i] = 32;
         length *= razm[i];
     }
 
 
     // std::cout << "Введите желаемый ранг тензора (без учёта шума): ";
     // std::cin >> R;
-    R = 5;
+    R = 3;
 
     // std::cout << "Введите долю шума: ";
     // std::cin >> noise;
@@ -719,11 +741,11 @@ main(void)
         sum += razm[i];
     }
 
-    // sum = sqrt((rank * sum) / length);
+    sum = sqrt((rank * sum) / length);
 
-    // std::cout << "Expected error: " << noise * sum << std::endl;
+    std::cout << "Expected error: " << noise * sum << std::endl;
 
-    // create_ALS_tensor(matrices, rank, N, razm, end_tensor, length, right_side_norm);
+    create_ALS_tensor(matrices, rank, N, razm, end_tensor, length, right_side_norm);
 
     delete[] tensor;
     delete[] end_tensor;
